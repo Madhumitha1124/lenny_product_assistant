@@ -1,4 +1,4 @@
-::: {align="center"}
+
 🚀 Lenny Growth Assistant
 Ask better product questions. Find source-backed insights. Turn ideas into useful content.
 A full-stack AI research and writing assistant built with React +
@@ -6,7 +6,7 @@ Vite, FastAPI, PostgreSQL, ChromaDB, and Ollama.
 Features · Quick start ·
 Workflows · Tests ·
 Troubleshooting
-:::
+
 ---
 > \[!IMPORTANT\] **Knowledge-base status:** this repository contains
 > synthetic demo examples, not genuine Lenny's Podcast or Newsletter
