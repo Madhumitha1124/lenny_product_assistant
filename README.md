@@ -220,4 +220,5 @@ Startup uses SQLAlchemy `create_all` plus additive compatibility repairs; this i
 5. Submit the public repository URL and demo-video link using the exact form linked from your assignment/course page. That form URL was not included in the project requirements supplied here, so no submission link is guessed or fabricated. Confirm the form reports a successful submission.
 #   l e n n y _ p r o d u c t _ a s s i s t a n t  
  #   l e n n y _ p r o d u c t _ a s s i s t a n t  
+ #   l e n n y _ p r o d u c t _ a s s i s t a n t  
  
