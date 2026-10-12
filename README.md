@@ -221,4 +221,4 @@ Startup uses SQLAlchemy `create_all` plus additive compatibility repairs; this i
 #   l e n n y _ p r o d u c t _ a s s i s t a n t  
  #   l e n n y _ p r o d u c t _ a s s i s t a n t  
  #   l e n n y _ p r o d u c t _ a s s i s t a n t  
- 
+ "# lenny_product_assistant" 
