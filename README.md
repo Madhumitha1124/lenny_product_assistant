@@ -1,226 +1,453 @@
-# Lenny Growth Assistant
-
-A full-stack research and writing assistant with React/Vite, FastAPI, PostgreSQL, ChromaDB, and Ollama. It provides isolated chat sessions, source-grounded answers, optional cloud LLMs, Markdown/HTML artifacts, and a Ship 30 for 30 essay workflow.
-
-## Requirements
-
-- Windows 10/11
-- Python 3.11
-- Node.js 20+ and npm
-- PostgreSQL 16 (native Windows installation; Docker is optional)
-- Ollama and the `llama3.2:3b` model for local inference
-
-The backend uses its own `ConversationService` and `ModelRouter` rather than a third-party agent framework. These coordinate retrieval, prompt construction, provider selection, citations, and persistence. The project does not currently include LangChain, PydanticAI, or another external agent framework.
-
-## Windows setup (no Docker required)
-
-### 1. Install and prepare PostgreSQL
-
-Install PostgreSQL 16 for Windows using the official PostgreSQL installer. Keep the PostgreSQL Windows service running. During installation, remember the password for the built-in `postgres` administrator.
-
-Open PowerShell and connect to the local server:
-
-```powershell
-psql -U postgres -h 127.0.0.1 -p 5432 -d postgres
+::: {align="center"}
+🚀 Lenny Growth Assistant
+Ask better product questions. Find source-backed insights. Turn ideas into useful content.
+A full-stack AI research and writing assistant built with React +
+Vite, FastAPI, PostgreSQL, ChromaDB, and Ollama.
+Features · Quick start ·
+Workflows · Tests ·
+Troubleshooting
+:::
+---
+> \[!IMPORTANT\] **Knowledge-base status:** this repository contains
+> synthetic demo examples, not genuine Lenny's Podcast or Newsletter
+> transcripts. Upload only content you are authorized to store before
+> demonstrating real source grounding.
+🗺️ Start here
+---
+If you want to...                   Jump to
+---
+Install and run locally without     Quick start
+Docker
+Understand the architecture         How it works
+Add authorized source files         Add knowledge
+sources
+Try chat, Ship 30, and artifacts    Try it
+Run automated checks                Tests
+Fix common errors                   Troubleshooting
+Prepare your assignment submission  Submission
+checklist
+✨ Features
+💬 Separate chat sessions with persisted conversation history.
+🔎 Retrieval-augmented answers using indexed text and available
+source details.
+✍️ Ship 30 for 30-style writing targeting approximately 1,250
+words.
+🧩 Markdown and HTML/CSS artifacts with an in-app viewer.
+🖥️ Local model inference through Ollama for the demo.
+☁️ Optional Anthropic and OpenAI configuration through backend
+environment variables.
+🧪 Automated tests and manual test instructions for validating
+core flows.
+Technology stack
+---
+Layer                               Technology
+---
+Frontend                            React, Vite
+Backend API                         FastAPI
+Session and source metadata         PostgreSQL
+Vector index                        ChromaDB
+Local LLM                           Ollama
+Embeddings                          Sentence Transformers
+(`all-MiniLM-L6-v2`, as configured)
+Agent architecture note: the current backend coordinates retrieval,
+prompt construction, provider selection, citations, and persistence
+through its own `ConversationService` and `ModelRouter`. It does not
+currently use the Anthropic Claude Agent SDK or Pi Coding Agent (nor
+LangChain/PydanticAI). This is a gap relative to the assignment's named
+agent-framework requirement.
+🧱 How it works
+``` mermaid
+flowchart LR
+    U[React UI] --> API[FastAPI]
+    API --> C[Conversation Service]
+    C --> R[Model Router]
+    C --> RET[Retriever]
+    RET --> V[(ChromaDB)]
+    RET --> DB[(PostgreSQL sources)]
+    C --> S[(PostgreSQL sessions/messages)]
+    R --> O[Ollama]
+    R -. optional .-> CLOUD[Anthropic / OpenAI]
+    C --> ART[Artifact generation + sanitization]
+    ART --> VIEW[Sandboxed Artifact Viewer]
 ```
-
-If `psql` is not on PATH, open **SQL Shell (psql)** from the Start menu and connect to host `127.0.0.1`, port `5432`, database `postgres`, user `postgres`. At the `postgres=#` prompt, create the local application role and database:
-
-```sql
+A typical request goes from the browser to FastAPI. The backend loads
+session context, retrieves relevant indexed text, builds a prompt, calls
+the selected model, and returns the answer with available source
+information. Artifact requests use the artifact generation and preview
+workflow.
+⚡ Quick start (Windows)
+Prerequisites
+Install: - Python 3.11 - Node.js
+20+ - PostgreSQL 16 for
+Windows - Ollama for
+Windows
+Docker is optional; these instructions use native Windows PostgreSQL.
+1. Create a PostgreSQL role and database
+Start the PostgreSQL Windows service. Open SQL Shell (psql) from the
+Start menu and connect to host `127.0.0.1`, port `5432`, database
+`postgres`, user `postgres`. Run:
+``` sql
 CREATE ROLE lenny WITH LOGIN PASSWORD 'change-me-local-only';
 CREATE DATABASE lenny_assistant OWNER lenny;
-\q
 ```
-
-These are development-only sample credentials. You can change the password, but update `DATABASE_URL` and `POSTGRES_DATABASE_URL` in `.env` to match. If the role already exists, change its password with `ALTER ROLE lenny WITH PASSWORD 'your-local-password';` rather than creating it again.
-
-### 2. Configure the app
-
-From PowerShell, go to the project root and copy the template. `.env.example` is documentation/template input only; the backend reads `.env`, not `.env.example`.
-
-```powershell
+If the `lenny` role already exists, set its password instead:
+``` sql
+ALTER ROLE lenny WITH PASSWORD 'your-local-password';
+```
+Exit with `\q`.
+> \[!WARNING\] These are sample local credentials. Replace them with
+> your own local password and never commit secrets.
+2. Configure `.env`
+Open PowerShell:
+``` powershell
 Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant"
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
-$securePassword = Read-Host "Enter the password you set for PostgreSQL role lenny" -AsSecureString
-$passwordPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePassword)
-try {
-    $password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($passwordPointer)
-    $encodedPassword = [Uri]::EscapeDataString($password)
-    $envPath = Join-Path (Get-Location) ".env"
-    $envLines = [System.Collections.Generic.List[string]]::new()
-    $envLines.AddRange([string[]][System.IO.File]::ReadAllLines($envPath))
-    for ($i = 0; $i -lt $envLines.Count; $i++) {
-        if ($envLines[$i].StartsWith("DATABASE_URL=")) {
-            $envLines[$i] = "DATABASE_URL=postgresql+asyncpg://lenny:$encodedPassword@127.0.0.1:5432/lenny_assistant"
-        } elseif ($envLines[$i].StartsWith("POSTGRES_DATABASE_URL=")) {
-            $envLines[$i] = "POSTGRES_DATABASE_URL=postgresql+asyncpg://lenny:$encodedPassword@127.0.0.1:5432/lenny_assistant"
-        }
-    }
-    [System.IO.File]::WriteAllLines($envPath, $envLines, (New-Object System.Text.UTF8Encoding($false)))
-    Write-Host "PostgreSQL connection URLs saved to .env. The password was not displayed."
-} finally {
-    if ($passwordPointer -ne [IntPtr]::Zero) {
-        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($passwordPointer)
-    }
-    $password = $null
-    $encodedPassword = $null
-    $securePassword.Dispose()
-}
+notepad .env
 ```
-
-The example file targets native PostgreSQL at `127.0.0.1:5432`. Enter the same password you set with `\password lenny` when prompted; it stays hidden and is written only to the ignored local `.env` file. Keep real cloud keys only in `.env`; never use `VITE_` prefixes for secrets.
-
-### 3. Install and start Ollama
-
-Install Ollama for Windows, open it so its local service is running, and pull the demo model:
-
-```powershell
+Set the database URLs and local provider to match your setup:
+``` dotenv
+DATABASE_URL=postgresql+asyncpg://lenny:YOUR_URL_ENCODED_PASSWORD@127.0.0.1:5432/lenny_assistant
+POSTGRES_DATABASE_URL=postgresql+asyncpg://lenny:YOUR_URL_ENCODED_PASSWORD@127.0.0.1:5432/lenny_assistant
+DEFAULT_LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3.2:3b
+```
+Replace the password placeholder. URL-encode special characters in the
+password. The backend reads `.env`, not `.env.example`. Keep `.env`
+private.
+3. Install and run Ollama
+``` powershell
 ollama pull llama3.2:1b
 ollama pull llama3.2:3b
 ollama list
 ```
-
-If Ollama is not already running as a Windows service/application, start it in a separate terminal with `ollama serve`. Do not start a second Ollama server if one is already listening on port 11434.
-
-### 4. Start the backend
-
+Ollama must be running. If it is not already running as a Windows
+application/service, open a separate terminal and run:
+``` powershell
+ollama serve
+```
+Do not start a second server if Ollama is already listening on port
+`11434`.
+> \[!TIP\] For a CPU-only demo, `llama3.2:1b` may respond faster than
+> `llama3.2:3b`. Essay generation can still take several minutes; test
+> the selected model before recording your demo.
+4. Start the backend
 Open a new PowerShell terminal:
-
-```powershell
+``` powershell
 Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant"
+
 if (!(Test-Path .\backend\.venv\Scripts\python.exe)) {
     Set-Location .\backend
     py -3.11 -m venv .venv
     Set-Location ..
 }
+
 Set-Location .\backend
 & .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 & .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
 ```
-
-On first startup, Python may download the Sentence Transformers embedding model. The API initializes tables in PostgreSQL and ChromaDB. If PostgreSQL is unavailable or its login is wrong, the backend reports a startup connection error; check the Windows PostgreSQL service and `.env` values.
-
-### 5. Start the frontend
-
+Keep the terminal open. The first startup may download the embedding
+model. A database connection failure must be fixed before the backend
+can operate correctly.
+5. Start the frontend
 Open another PowerShell terminal:
-
-```powershell
+``` powershell
 Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant\frontend"
 npm ci
 npm run dev
 ```
-
-Open the frontend at http://localhost:5173/. API health is at http://localhost:8001/api/health and interactive API docs at http://localhost:8001/docs. Keep the backend, frontend, PostgreSQL, and Ollama running while using the app.
-
-## Optional Docker Compose startup
-
-Docker is not required for local development. If Docker Desktop is installed, Compose can run PostgreSQL, the backend, and frontend while Ollama remains on the Windows host. The Compose backend uses the database service hostname and maps PostgreSQL to host port `5433`.
-
-```powershell
+Open: - App: http://localhost:5173/ - API health:
+http://localhost:8001/api/health - Interactive API docs:
+http://localhost:8001/docs
+Keep PostgreSQL, Ollama, the backend, and frontend running.
+🧭 Try it
+💬 Chat and sessions
+Open the app and start a new chat.
+Ask a specific product or growth question.
+Ask a follow-up to check session context.
+Start another chat and verify that its context is independent.
+📚 Add knowledge sources
+Uploads accept UTF-8 `.txt` or `.md` files through the ingestion API.
+Upload only content you have permission to store.
+Open http://localhost:8001/docs.
+Expand `POST /api/ingest/upload` and select Try it out.
+Choose the source file and provide its actual title and original
+URL, if available.
+Execute the request and note the source ID and indexed chunk count.
+Check `GET /api/knowledge/sources`.
+Ask a question answerable from the uploaded text. Check the source
+title, ID, excerpt, and URL in the answer.
+Limits: UTF-8 text, up to 10 MB. Identical content may reuse an
+existing source ID. Do not invent source URLs or describe synthetic text
+as genuine Lenny content.
+✍️ Ship 30 for 30-style essay
+Select a working Ollama model in the UI.
+Click Ship 30.
+Wait for generation; local models may take several minutes.
+Check the hook, narrative progression, headings, selective bolding,
+useful takeaway, and approximate 1,250-word target.
+Verify that source-based claims are supported by retrieved material.
+Confirm the essay is saved and opens in the Artifact Viewer.
+If generation times out, test a short chat first, select `llama3.2:1b`,
+and inspect the backend terminal before retrying.
+🧩 Artifact Viewer
+Ask the assistant to create a small Markdown document or HTML/CSS
+page.
+Open the Artifact Viewer and confirm it renders inside the app.
+Inspect, copy, or download the artifact if those controls are
+available.
+Treat generated HTML as untrusted. The viewer is intended to use
+sanitization and a sandboxed iframe; review the code before using it
+with sensitive data.
+🔧 Configuration
+---
+Variable                            Purpose
+---
+`DATABASE_URL`                      Main SQLAlchemy database URL
+`POSTGRES_DATABASE_URL`             PostgreSQL URL used by
+integration/migration workflows
+`DEFAULT_LLM_PROVIDER`              Default provider; use `ollama` for
+the local demo
+`OLLAMA_BASE_URL`                   Ollama server URL
+`OLLAMA_MODEL`                      Default local model
+`OLLAMA_TIMEOUT`                    Timeout for supported model calls
+`ANTHROPIC_API_KEY`                 Optional Anthropic key
+`OPENAI_API_KEY`                    Optional OpenAI key
+`CHROMA_PERSIST_DIR`                ChromaDB persistence directory
+`EMBEDDING_MODEL`                   Sentence Transformers embedding
+model
+Use `.env.example` as the source of truth if variable names differ in
+your checkout. Restart the backend after editing `.env`. Never put API
+keys in `VITE_*` variables. Real cloud-provider calls have not been
+verified here and require valid credentials.
+🧪 Tests
+Backend
+``` powershell
+Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant\backend"
+& .\.venv\Scripts\python.exe -m pytest -q
+```
+Frontend build and lint
+``` powershell
+Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant\frontend"
+npm run build
+npm run lint
+```
+Optional PostgreSQL integration test
+Use a disposable test database, not your only copy of important data. In
+SQL Shell:
+``` sql
+CREATE DATABASE lenny_assistant_test OWNER lenny;
+```
+Then run in PowerShell:
+``` powershell
+Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant\backend"
+$env:TEST_POSTGRES_URL = "postgresql+asyncpg://lenny:YOUR_URL_ENCODED_PASSWORD@127.0.0.1:5432/lenny_assistant_test"
+& .\.venv\Scripts\python.exe -m pytest -q
+Remove-Item Env:TEST_POSTGRES_URL
+```
+See also: - `docs/manual-test-plan.md` -
+`docs/final-requirements-audit.md` -
+`docs/implementation-log.md`
+🐳 Optional Docker Compose
+Docker is not required for the native Windows workflow. If Docker
+Desktop is working:
+``` powershell
 Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant"
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 docker compose up --build
 ```
-
-Stop with `Ctrl+C` or `docker compose stop`. `docker compose down` preserves named data volumes. Do not run `docker compose down -v` unless you intend to delete the Compose database and vector index.
-
-## Features and source data
-
-- **Chat and sessions:** each chat has its own persisted session and message history.
-- **RAG:** TXT/Markdown sources are chunked and embedded locally; ChromaDB stores vectors and PostgreSQL stores source metadata/content.
-- **Citations:** responses include traceable source IDs, titles, and excerpts. The source panel also shows an available URL.
-- **Unsupported topics:** when no relevant indexed source is retrieved, the assistant labels the answer as general perspective rather than attributing it to Lenny.
-- **Providers:** Ollama is the default. Anthropic and OpenAI are optional backend-configured providers. If a cloud call fails, the app tries Ollama only if its model is available and labels the actual provider. If fallback cannot complete, the response reports the error.
-- **Artifacts:** Markdown and HTML/CSS output can be previewed, inspected, copied, and downloaded. HTML preview is sanitized and isolated in a sandboxed iframe.
-- **Ship 30:** the action generates an approximately 1,250-word essay, saves it as an artifact, and opens it in the Artifact Viewer.
-
-The repository does **not** include genuine Lenny's Podcast or Newsletter transcripts. Its bundled examples are synthetic demo fixtures and are marked as such. To test real source grounding, upload only transcript/newsletter content you are authorized to store using `POST /api/ingest/upload`. Supply an accurate title and the original source URL when available; do not label synthetic or unrelated content as a Lenny source.
-
-Beginner-friendly upload steps:
-
-1. Start the backend and open http://localhost:8001/docs in your browser.
-2. Expand **POST `/api/ingest/upload`**, select **Try it out**, then choose your authorized `.txt` or `.md` file.
-3. Enter its actual title and, if known, author and original URL. Leave `is_demo` set to `false` only for genuine, authorized source material. Do not invent a URL.
-4. Select **Execute**. A successful response includes the source ID and indexed chunk count.
-5. Confirm the source appears under **GET `/api/knowledge/sources`**. Ask a question that can be answered from the uploaded text and check the response's source title, ID, excerpt, and original URL.
-
-Uploads must be UTF-8 text and at most 10 MB. Re-uploading identical content reuses its source ID instead of creating a duplicate.
-
-## Provider configuration
-
-- Default local provider: `ollama` / `llama3.2:3b`
-- `llama3.2:1b` is also available locally. A live Ship 30 request using this model completed in 277 seconds with 1,475 words; select it in the model picker for a more reliable CPU-only demo. The configured default remains `llama3.2:3b`. Generation time and essay length depend on the machine, so check the actual result.
-- Optional Anthropic: set `ANTHROPIC_API_KEY` in `.env`
-- Optional OpenAI: set `OPENAI_API_KEY` in `.env`
-
-Long local generations can take several minutes on a small machine; the default `OLLAMA_TIMEOUT` is 600 seconds. Restart the backend after changing `.env`. Keys are read by the backend only and are not sent to the browser. Offline tests mock cloud calls; a real cloud request requires a valid key and has not been verified here.
-
-## Tests and checks
-
-```powershell
-# Backend tests
-Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant\backend"
-& .\.venv\Scripts\python.exe -m pytest -q
-
-# Frontend type-check, production bundle, and lint
-Set-Location ..\frontend
-npm run build
-npm run lint
+Compose uses its own database service and maps PostgreSQL to host port
+`5433`; the backend container reaches Windows-host Ollama using
+`host.docker.internal`.
+Stop with `Ctrl+C` or `docker compose stop`. `docker compose down`
+preserves named volumes. Do not use `docker compose down -v` unless
+you intend to delete the Compose database and vector index.
+🛠 Troubleshooting
+```{=html}
+<details>
 ```
-
-To run the optional PostgreSQL integration test, first create a dedicated disposable database (do not point this test at your only copy of important data). In the PostgreSQL SQL Shell, run `CREATE DATABASE lenny_assistant_test OWNER lenny;`. Then in PowerShell:
-
-```powershell
-Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant\backend"
-$env:TEST_POSTGRES_URL = "postgresql+asyncpg://lenny:change-me-local-only@127.0.0.1:5432/lenny_assistant_test"
-& .\.venv\Scripts\python.exe -m pytest -q
-Remove-Item Env:TEST_POSTGRES_URL
+```{=html}
+<summary>
 ```
-
-Replace the sample password if you changed it in `.env`. The integration test inserts a uniquely identified session/message and deletes only those rows.
-
-For hands-on steps, see [docs/manual-test-plan.md](./docs/manual-test-plan.md). The requirements checklist is in [docs/final-requirements-audit.md](./docs/final-requirements-audit.md); audit outcomes and corrections are in [docs/implementation-log.md](./docs/implementation-log.md).
-
-## Migrate existing SQLite data
-
-The preserved local SQLite database currently contains 6 sessions and 14 messages (plus 3 knowledge-source rows and no artifacts). Migration is optional historical-data recovery; the existing PostgreSQL application database remains the active database. The script is repeatable: it inserts missing IDs, leaves existing PostgreSQL rows untouched, reports rows already present, and validates per-table row counts. Back up the SQLite file and PostgreSQL database before running it. Set `SQLITE_SOURCE_URL` and `POSTGRES_DATABASE_URL` in `.env`, then:
-
-```powershell
+`<strong>`{=html}PostgreSQL connection fails`</strong>`{=html}
+```{=html}
+</summary>
+```
+Check that the Windows PostgreSQL service is running.
+Verify the `lenny` role, `lenny_assistant` database, port, username,
+and password.
+URL-encode special characters in the database password.
+Read the backend terminal for the actual connection error.
+```{=html}
+</details>
+```
+```{=html}
+<details>
+```
+```{=html}
+<summary>
+```
+`<strong>`{=html}Ollama is unavailable or the model is
+missing`</strong>`{=html}
+```{=html}
+</summary>
+```
+Run `ollama list`. If the model is missing, run
+`ollama pull llama3.2:1b`. Make sure the Ollama service is available at
+`http://127.0.0.1:11434`. Do not launch a second `ollama serve` if the
+service is already running.
+```{=html}
+</details>
+```
+```{=html}
+<details>
+```
+```{=html}
+<summary>
+```
+`<strong>`{=html}Ship 30 takes too long`</strong>`{=html}
+```{=html}
+</summary>
+```
+Test a short chat prompt first.
+Select `llama3.2:1b` for potentially faster generation.
+Check the backend terminal for the actual timeout/error.
+Avoid repeatedly clicking while a request is still running.
+Check essay quality and length; a successful HTTP response alone
+does not prove the writing requirement is met.
+```{=html}
+</details>
+```
+```{=html}
+<details>
+```
+```{=html}
+<summary>
+```
+`<strong>`{=html}The frontend cannot reach FastAPI`</strong>`{=html}
+```{=html}
+</summary>
+```
+Confirm the backend is running on port `8001`, then open
+http://localhost:8001/api/health and http://localhost:8001/docs. Inspect
+the browser console and backend terminal for the error.
+```{=html}
+</details>
+```
+```{=html}
+<details>
+```
+```{=html}
+<summary>
+```
+`<strong>`{=html}Answers do not show relevant
+citations`</strong>`{=html}
+```{=html}
+</summary>
+```
+Confirm upload succeeded, check `GET /api/knowledge/sources`, and ask a
+question directly answerable from the uploaded text. Synthetic demo
+fixtures do not prove grounding in genuine Lenny material.
+```{=html}
+</details>
+```
+🔐 Security and data handling
+Keep `.env`, credentials, local databases, private source files, and
+model data out of Git.
+Never expose secrets through frontend variables.
+Upload only content you have permission to use.
+Treat generated HTML as untrusted and keep it isolated in the
+Artifact Viewer.
+Back up both databases before any migration.
+For production, use managed secrets, reviewed security settings, and
+versioned database migrations.
+🗃️ Optional SQLite history migration
+This script is for recovering historical local SQLite data into
+PostgreSQL; it is optional for the main demo. Back up both databases
+first and verify `SQLITE_SOURCE_URL` and `POSTGRES_DATABASE_URL` in
+`.env`.
+``` powershell
 Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant\backend"
 & .\.venv\Scripts\python.exe .\scripts\migrate_sqlite_to_postgres.py
 ```
-
-Startup uses SQLAlchemy `create_all` plus additive compatibility repairs; this is not a versioned Alembic migration system. For deployments, use versioned migrations and managed secrets.
-
-## Demo video, GitHub, and submission
-
-1. Record a 2–3 minute walkthrough with a screen recorder such as OBS or the Windows camera/recording tools. Turn on your webcam and keep your camera visible in a corner for the entire recording.
-2. Show the app starting, Ollama/model selection, a new independent chat, a source-backed question (after uploading authorized material), an unsupported question, one Markdown or HTML artifact, and Ship 30. Do not display `.env`, API keys, database passwords, or private transcript text.
-3. Review the recording before sharing it. The project does not create or claim a demo video for you.
-4. To publish, open PowerShell in the project root and check whether this folder is already a Git repository before initializing one:
-
-   ```powershell
-   Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant"
-   git status
-   git check-ignore .env
-   ```
-
-   If `git status` says this is not a repository, create a new public repository on GitHub's website, then initialize and push this project (replace the example account/repository):
-
-   ```powershell
-   git init
-   git add .
-   git status --short
-   git commit -m "Submit Lenny Growth Assistant"
-   git branch -M main
-   git remote add origin https://github.com/YOUR-ACCOUNT/YOUR-REPOSITORY.git
-   git push -u origin main
-   ```
-
-   Before `git add .` and before pushing, inspect staged file names and confirm `.env`, secrets, private transcripts, local databases, and generated model data are not included. `.env` is listed in `.gitignore`. If this is already a repository, do not run `git init` or replace its remote; review its existing branch/remote and follow your usual push flow. Inspect the public repository for secrets before sharing its URL. Do not publish transcripts unless you have permission.
-5. Submit the public repository URL and demo-video link at [the Lenny Growth Assistant assignment form](https://forms.gle/LgotDHNVxW1mbzNE7). Confirm the form reports a successful submission.
-#   l e n n y _ p r o d u c t _ a s s i s t a n t  
- #   l e n n y _ p r o d u c t _ a s s i s t a n t  
- #   l e n n y _ p r o d u c t _ a s s i s t a n t  
- "# lenny_product_assistant" 
-"# lenny_product_assistant" 
+Review the script and output before running against important data.
+Startup currently uses SQLAlchemy `create_all` plus additive
+compatibility repairs, not a versioned Alembic migration system.
+🎬 Submission checklist
+[ ] App starts using documented instructions.
+[ ] Ollama is running and the selected model responds.
+[ ] Chat and independent sessions work.
+[ ] Source-grounded answers show real source details.
+[ ] Unsupported questions are not falsely attributed to transcripts.
+[ ] Ship 30 essay generates and opens in the Artifact Viewer.
+[ ] Markdown/HTML artifact preview works.
+[ ] Backend tests, frontend build, and lint have been run and
+results recorded.
+[ ] README, PRD, `design.md`, `architecture.md`, tests, and agent
+transcripts/logs are present.
+[ ] `.env`, secrets, private transcripts, local databases, and model
+data are excluded from Git.
+[ ] A 2--3 minute YouTube demo with your camera enabled is
+ready.
+[ ] Public GitHub URL and demo video URL are ready.
+[ ] Submission form confirms success.
+Suggested demo flow (2--3 minutes)
+Problem and product (15--20 sec): who it helps and what it does.
+Local model (15--20 sec): show Ollama/provider selection.
+Chat and sessions (20--30 sec): ask a question and show a
+follow-up or new session.
+Grounding (20--30 sec): ask about an authorized uploaded source
+and show its citation.
+Artifact Viewer (20--30 sec): create and preview a Markdown or
+HTML artifact.
+Ship 30 (20--30 sec): generate an essay and show the result.
+Trade-off (15--20 sec): discuss local-model latency versus cloud
+capability.
+Keep your camera visible throughout. Do not show `.env`, credentials, or
+private source text.
+Publish to GitHub safely
+From the project root:
+``` powershell
+Set-Location "C:\Users\Madhumitha S\Desktop\Lenny's podcast ai\lenny-growth-assistant"
+git status
+git check-ignore .env
+```
+If this is already a Git repository, inspect its current branch and
+remote before pushing. If it is not, create a public repository on
+GitHub, then:
+``` powershell
+git init
+git add .
+git status --short
+git commit -m "Submit Lenny Growth Assistant"
+git branch -M main
+git remote add origin https://github.com/YOUR-ACCOUNT/YOUR-REPOSITORY.git
+git push -u origin main
+```
+Replace the example URL with your real repository. Before committing or
+pushing, inspect the staged file list. Never push `.env`, secrets,
+private transcripts, databases, or model data, and do not replace an
+existing remote without checking it first.
+Submit
+Open the official Lenny Growth Assistant submission
+form
+Submit the public GitHub repository URL and YouTube demo link. Confirm
+the form reports successful submission.
+📌 Known limitations --- disclose honestly
+Genuine Lenny transcripts are not bundled; included knowledge
+examples are synthetic.
+A live cloud-provider request has not been verified with real
+credentials.
+The backend uses an in-house service/router rather than the
+assignment's named external agent SDK options.
+Verify PostgreSQL integration in the target environment.
+Local-model latency and output quality vary by machine and selected
+model.
+Database setup uses `create_all` and compatibility repairs rather
+than versioned Alembic migrations.
+---
+::: {align="center"}
+Built for practical product and growth research.
+Verify the setup. Test the workflows. Protect your secrets. Document
+the trade-offs.
+:::
