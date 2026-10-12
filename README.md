@@ -75,6 +75,7 @@ The example file targets native PostgreSQL at `127.0.0.1:5432`. Enter the same p
 Install Ollama for Windows, open it so its local service is running, and pull the demo model:
 
 ```powershell
+ollama pull llama3.2:1b
 ollama pull llama3.2:3b
 ollama list
 ```
@@ -148,7 +149,7 @@ Uploads must be UTF-8 text and at most 10 MB. Re-uploading identical content reu
 ## Provider configuration
 
 - Default local provider: `ollama` / `llama3.2:3b`
-- `llama3.2:1b` is also installed locally and can be selected after **Refresh models**, but its live Ship 30 request timed out too. A cloud provider or faster hardware/model may be needed for the long essay; verify the actual word count instead of assuming it meets the target.
+- `llama3.2:1b` is also available locally. A live Ship 30 request using this model completed in 277 seconds with 1,475 words; select it in the model picker for a more reliable CPU-only demo. The configured default remains `llama3.2:3b`. Generation time and essay length depend on the machine, so check the actual result.
 - Optional Anthropic: set `ANTHROPIC_API_KEY` in `.env`
 - Optional OpenAI: set `OPENAI_API_KEY` in `.env`
 
@@ -217,8 +218,9 @@ Startup uses SQLAlchemy `create_all` plus additive compatibility repairs; this i
    ```
 
    Before `git add .` and before pushing, inspect staged file names and confirm `.env`, secrets, private transcripts, local databases, and generated model data are not included. `.env` is listed in `.gitignore`. If this is already a repository, do not run `git init` or replace its remote; review its existing branch/remote and follow your usual push flow. Inspect the public repository for secrets before sharing its URL. Do not publish transcripts unless you have permission.
-5. Submit the public repository URL and demo-video link using the exact form linked from your assignment/course page. That form URL was not included in the project requirements supplied here, so no submission link is guessed or fabricated. Confirm the form reports a successful submission.
+5. Submit the public repository URL and demo-video link at [the Lenny Growth Assistant assignment form](https://forms.gle/LgotDHNVxW1mbzNE7). Confirm the form reports a successful submission.
 #   l e n n y _ p r o d u c t _ a s s i s t a n t  
  #   l e n n y _ p r o d u c t _ a s s i s t a n t  
  #   l e n n y _ p r o d u c t _ a s s i s t a n t  
  "# lenny_product_assistant" 
+"# lenny_product_assistant" 
