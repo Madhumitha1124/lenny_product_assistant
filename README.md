@@ -219,4 +219,5 @@ Startup uses SQLAlchemy `create_all` plus additive compatibility repairs; this i
    Before `git add .` and before pushing, inspect staged file names and confirm `.env`, secrets, private transcripts, local databases, and generated model data are not included. `.env` is listed in `.gitignore`. If this is already a repository, do not run `git init` or replace its remote; review its existing branch/remote and follow your usual push flow. Inspect the public repository for secrets before sharing its URL. Do not publish transcripts unless you have permission.
 5. Submit the public repository URL and demo-video link using the exact form linked from your assignment/course page. That form URL was not included in the project requirements supplied here, so no submission link is guessed or fabricated. Confirm the form reports a successful submission.
 #   l e n n y _ p r o d u c t _ a s s i s t a n t  
+ #   l e n n y _ p r o d u c t _ a s s i s t a n t  
  
